@@ -19,11 +19,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # --- यहाँ बदलाव किया गया है ---
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.2' # 8.2.2 की जगह 8.2 करें
+          gradle-version: '8.2'
 
       - name: Generate Project Structure and Files
         run: |
@@ -52,13 +51,35 @@ jobs:
           }
           EOF
 
-          # 2. settings.gradle
+          # 2. settings.gradle (Modern Format)
           cat << 'EOF' > settings.gradle
-          include ':app'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
           rootProject.name = "UninstallGuard"
+          include ':app'
           EOF
 
-          # 3. app/build.gradle
+          # 3. gradle.properties (NEW - Very Important for CI)
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+          # 4. app/build.gradle
           cat << 'EOF' > app/build.gradle
           apply plugin: 'com.android.application'
           apply plugin: 'kotlin-android'
@@ -82,6 +103,9 @@ jobs:
               kotlinOptions {
                   jvmTarget = '17'
               }
+              buildFeatures {
+                  viewBinding true
+              }
           }
 
           dependencies {
@@ -91,7 +115,7 @@ jobs:
           }
           EOF
 
-          # 4. AndroidManifest.xml
+          # 5. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -135,7 +159,7 @@ jobs:
           </manifest>
           EOF
 
-          # 5. Accessibility Config
+          # 6. Accessibility Config
           cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
@@ -146,7 +170,7 @@ jobs:
               android:description="@string/accessibility_description" />
           EOF
 
-          # 6. Values Strings
+          # 7. Values Strings
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Uninstall Guard</string>
@@ -154,7 +178,7 @@ jobs:
           </resources>
           EOF
 
-          # 7. Layouts
+          # 8. Layouts
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -232,7 +256,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 8. Kotlin Files
+          # 9. Kotlin Files
           cat << 'EOF' > app/src/main/java/com/appprotector/uninstallguard/MainActivity.kt
           package com.appprotector.uninstallguard
 
