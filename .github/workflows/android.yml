@@ -19,13 +19,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Android Project Structure
+      - name: Generate Project Structure and Files
         run: |
           mkdir -p app/src/main/java/com/appprotector/uninstallguard
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/xml
 
-          # 1. root build.gradle
+          # 1. build.gradle (Root)
           cat << 'EOF' > build.gradle
           buildscript {
               repositories {
@@ -68,12 +69,6 @@ jobs:
                   versionName "1.0"
               }
 
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
@@ -99,9 +94,7 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
                   android:label="App Uninstall Guard"
-                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
 
@@ -137,7 +130,6 @@ jobs:
           EOF
 
           # 5. Accessibility Config
-          mkdir -p app/src/main/res/xml
           cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
@@ -234,7 +226,7 @@ jobs:
           </LinearLayout>
           EOF
 
-          # 8. Kotlin Source Files
+          # 8. Kotlin Files
           cat << 'EOF' > app/src/main/java/com/appprotector/uninstallguard/MainActivity.kt
           package com.appprotector.uninstallguard
 
@@ -310,7 +302,7 @@ jobs:
                       val entered = etAuthPassword.text.toString().trim()
                       if (entered == savedPassword) {
                           UninstallProtectionService.isAuthorized = true
-                          Toast.makeText(this, "Unlocked! You can proceed now.", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Unlocked!", Toast.LENGTH_SHORT).show()
                           finish()
                       } else {
                           Toast.makeText(this, "Incorrect Password!", Toast.LENGTH_SHORT).show()
@@ -348,13 +340,11 @@ jobs:
 
                   val packageName = event.packageName?.toString() ?: ""
 
-                  // Detect Package Installer or Settings App
                   if (packageName.contains("packageinstaller") || packageName.contains("settings")) {
                       val rootNode = rootInActiveWindow ?: return
 
                       if (isUninstallRequested(rootNode)) {
                           if (!isAuthorized) {
-                              // Launch Password Lock screen immediately
                               val intent = Intent(this, PasswordAuthActivity::class.java).apply {
                                   addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                               }
@@ -388,11 +378,8 @@ jobs:
           }
           EOF
 
-      - name: Grant Gradle execute permission
-        run: gradle wrapper --gradle-version 8.5 --distribution-type bin
-
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
