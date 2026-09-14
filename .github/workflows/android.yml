@@ -31,7 +31,7 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
 
-          # 1. build.gradle (Root) - FIXED: Removed allprojects block
+          # 1. build.gradle (Root)
           cat << 'EOF' > build.gradle
           buildscript {
               repositories {
@@ -45,7 +45,7 @@ jobs:
           }
           EOF
 
-          # 2. settings.gradle (Modern Format)
+          # 2. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -153,15 +153,16 @@ jobs:
           </manifest>
           EOF
 
-          # 6. Accessibility Config
+          # 6. Accessibility Config (UPDATED)
           cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeWindowsChanged"
               android:accessibilityFeedbackType="feedbackGeneric"
-              android:accessibilityFlags="flagIncludeNotImportantViews"
+              android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
               android:canRetrieveWindowContent="true"
-              android:description="@string/accessibility_description" />
+              android:description="@string/accessibility_description"
+              android:notificationTimeout="100" />
           EOF
 
           # 7. Values Strings
@@ -352,11 +353,17 @@ jobs:
           import android.content.Intent
           import android.view.accessibility.AccessibilityEvent
           import android.view.accessibility.AccessibilityNodeInfo
+          import android.widget.Toast
 
           class UninstallProtectionService : AccessibilityService() {
 
               companion object {
                   var isAuthorized = false
+              }
+
+              override fun onServiceConnected() {
+                  super.onServiceConnected()
+                  Toast.makeText(this, "Protection Service Connected!", Toast.LENGTH_SHORT).show()
               }
 
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
