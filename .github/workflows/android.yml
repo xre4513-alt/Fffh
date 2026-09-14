@@ -19,6 +19,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # --- नया स्टेप: Gradle Wrapper सेटअप ---
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.2.2
+
       - name: Generate Project Structure and Files
         run: |
           mkdir -p app/src/main/java/com/appprotector/uninstallguard
