@@ -1,0 +1,401 @@
+name: Build AppLock APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Generate Android Project Structure
+        run: |
+          mkdir -p app/src/main/java/com/appprotector/uninstallguard
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+
+          # 1. root build.gradle
+          cat << 'EOF' > build.gradle
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
+                  classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          # 2. settings.gradle
+          cat << 'EOF' > settings.gradle
+          include ':app'
+          rootProject.name = "UninstallGuard"
+          EOF
+
+          # 3. app/build.gradle
+          cat << 'EOF' > app/build.gradle
+          apply plugin: 'com.android.application'
+          apply plugin: 'kotlin-android'
+
+          android {
+              compileSdk 34
+              namespace "com.appprotector.uninstallguard"
+
+              defaultConfig {
+                  applicationId "com.appprotector.uninstallguard"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+          # 4. AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="App Uninstall Guard"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <activity 
+                      android:name=".PasswordAuthActivity"
+                      android:exported="false"
+                      android:excludeFromRecents="true"
+                      android:launchMode="singleInstance"/>
+
+                  <service
+                      android:name=".UninstallProtectionService"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config" />
+                  </service>
+
+              </application>
+          </manifest>
+          EOF
+
+          # 5. Accessibility Config
+          mkdir -p app/src/main/res/xml
+          cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagIncludeNotImportantViews"
+              android:canRetrieveWindowContent="true"
+              android:description="@string/accessibility_description" />
+          EOF
+
+          # 6. Values Strings
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Uninstall Guard</string>
+              <string name="accessibility_description">Used to prevent unauthorized uninstallation of apps by prompting password check.</string>
+          </resources>
+          EOF
+
+          # 7. Layouts
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="24dp"
+              android:gravity="center">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="App Uninstall Protector"
+                  android:textSize="22sp"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="24dp"/>
+
+              <EditText
+                  android:id="@+id/etPassword"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="Set Lock Password"
+                  android:inputType="textPassword"
+                  android:layout_marginBottom="16dp"/>
+
+              <Button
+                  android:id="@+id/btnSave"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Save Password"/>
+
+              <Button
+                  android:id="@+id/btnEnableAccessibility"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="16dp"
+                  android:text="Enable Accessibility Permission"/>
+
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/activity_password_auth.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:padding="24dp"
+              android:gravity="center"
+              android:background="#FFFFFF">
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="Enter Password to Uninstall"
+                  android:textSize="20sp"
+                  android:textColor="#000000"
+                  android:textStyle="bold"
+                  android:layout_marginBottom="20dp"/>
+
+              <EditText
+                  android:id="@+id/etAuthPassword"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:hint="Enter Saved Password"
+                  android:inputType="textPassword"
+                  android:layout_marginBottom="16dp"/>
+
+              <Button
+                  android:id="@+id/btnUnlock"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Verify &amp; Allow"/>
+
+          </LinearLayout>
+          EOF
+
+          # 8. Kotlin Source Files
+          cat << 'EOF' > app/src/main/java/com/appprotector/uninstallguard/MainActivity.kt
+          package com.appprotector.uninstallguard
+
+          import android.content.Intent
+          import android.content.SharedPreferences
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+
+              private lateinit var prefs: SharedPreferences
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  prefs = getSharedPreferences("GuardPrefs", MODE_PRIVATE)
+
+                  val etPassword = findViewById<EditText>(R.id.etPassword)
+                  val btnSave = findViewById<Button>(R.id.btnSave)
+                  val btnEnableAccessibility = findViewById<Button>(R.id.btnEnableAccessibility)
+
+                  val savedPass = prefs.getString("APP_PASSWORD", null)
+                  if (savedPass != null) {
+                      etPassword.setText(savedPass)
+                  }
+
+                  btnSave.setOnClickListener {
+                      val pass = etPassword.text.toString().trim()
+                      if (pass.isNotEmpty()) {
+                          prefs.edit().putString("APP_PASSWORD", pass).apply()
+                          Toast.makeText(this, "Password Saved Successfully!", Toast.LENGTH_SHORT).show()
+                      } else {
+                          Toast.makeText(this, "Please enter a valid password", Toast.LENGTH_SHORT).show()
+                      }
+                  }
+
+                  btnEnableAccessibility.setOnClickListener {
+                      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/appprotector/uninstallguard/PasswordAuthActivity.kt
+          package com.appprotector.uninstallguard
+
+          import android.content.Intent
+          import android.content.SharedPreferences
+          import android.os.Bundle
+          import android.widget.Button
+          import android.widget.EditText
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+
+          class PasswordAuthActivity : AppCompatActivity() {
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_password_auth)
+
+                  val prefs: SharedPreferences = getSharedPreferences("GuardPrefs", MODE_PRIVATE)
+                  val savedPassword = prefs.getString("APP_PASSWORD", "")
+
+                  val etAuthPassword = findViewById<EditText>(R.id.etAuthPassword)
+                  val btnUnlock = findViewById<Button>(R.id.btnUnlock)
+
+                  btnUnlock.setOnClickListener {
+                      val entered = etAuthPassword.text.toString().trim()
+                      if (entered == savedPassword) {
+                          UninstallProtectionService.isAuthorized = true
+                          Toast.makeText(this, "Unlocked! You can proceed now.", Toast.LENGTH_SHORT).show()
+                          finish()
+                      } else {
+                          Toast.makeText(this, "Incorrect Password!", Toast.LENGTH_SHORT).show()
+                      }
+                  }
+              }
+
+              override fun onBackPressed() {
+                  super.onBackPressed()
+                  val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                      addCategory(Intent.CATEGORY_HOME)
+                      flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                  }
+                  startActivity(homeIntent)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/appprotector/uninstallguard/UninstallProtectionService.kt
+          package com.appprotector.uninstallguard
+
+          import android.accessibilityservice.AccessibilityService
+          import android.content.Intent
+          import android.view.accessibility.AccessibilityEvent
+          import android.view.accessibility.AccessibilityNodeInfo
+
+          class UninstallProtectionService : AccessibilityService() {
+
+              companion object {
+                  var isAuthorized = false
+              }
+
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  if (event == null) return
+
+                  val packageName = event.packageName?.toString() ?: ""
+
+                  // Detect Package Installer or Settings App
+                  if (packageName.contains("packageinstaller") || packageName.contains("settings")) {
+                      val rootNode = rootInActiveWindow ?: return
+
+                      if (isUninstallRequested(rootNode)) {
+                          if (!isAuthorized) {
+                              // Launch Password Lock screen immediately
+                              val intent = Intent(this, PasswordAuthActivity::class.java).apply {
+                                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                              }
+                              startActivity(intent)
+                          }
+                      } else {
+                          isAuthorized = false
+                      }
+                  }
+              }
+
+              private fun isUninstallRequested(node: AccessibilityNodeInfo): Boolean {
+                  val text = node.text?.toString()?.lowercase() ?: ""
+                  val contentDesc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+                  if (text.contains("uninstall") || text.contains("un-install") ||
+                      contentDesc.contains("uninstall")) {
+                      return true
+                  }
+
+                  for (i in 0 until node.childCount) {
+                      val child = node.getChild(i)
+                      if (child != null && isUninstallRequested(child)) {
+                          return true
+                      }
+                  }
+                  return false
+              }
+
+              override fun onInterrupt() {}
+          }
+          EOF
+
+      - name: Grant Gradle execute permission
+        run: gradle wrapper --gradle-version 8.5 --distribution-type bin
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppUninstallGuard-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
