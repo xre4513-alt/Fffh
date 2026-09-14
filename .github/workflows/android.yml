@@ -31,7 +31,7 @@ jobs:
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
 
-          # 1. build.gradle (Root)
+          # 1. build.gradle (Root) - FIXED: Removed allprojects block
           cat << 'EOF' > build.gradle
           buildscript {
               repositories {
@@ -41,12 +41,6 @@ jobs:
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.2.2'
                   classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
               }
           }
           EOF
@@ -71,7 +65,7 @@ jobs:
           include ':app'
           EOF
 
-          # 3. gradle.properties (NEW - Very Important for CI)
+          # 3. gradle.properties
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
